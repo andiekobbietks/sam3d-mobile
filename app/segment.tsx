@@ -1,17 +1,27 @@
+import {
+  Box,
+  ButtonText,
+  Button as GluestackButton,
+  Text as GluestackText,
+  Heading,
+  HStack,
+} from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { ArrowLeft, Trash2 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Pressable,
+  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { generateSam3dObject, segmentWithSam2 } from "./lib/api";
+import { setGifData } from "./lib/gifCache";
 import { uriToResizedBase64 } from "./lib/image";
-import { setPlyData } from "./lib/plyCache";
-import { generateSam3dObject, segmentWithSam2 } from "./lib/runpod";
 
 // The image is resized to this width in uriToResizedBase64
 const RESIZED_IMAGE_WIDTH = 1024;
@@ -188,11 +198,13 @@ export default function SegmentScreen() {
       console.log("=== API RESPONSE ===");
       console.log("Result:", { success: result.success, score: result.score });
       console.log("New mask base64 length:", result.mask?.length);
+      console.log("Full mask base64:", result.mask);
 
       if (result.success) {
         // Update accumulated points for next tap
         setTapPositions(allPositions);
-        setMaskImage(`data:image/png;base64,${result.mask}`);
+        const maskDataUri = `data:image/png;base64,${result.mask}`;
+        setMaskImage(maskDataUri);
         console.log("Segmentation successful with score:", result.score);
       }
     } catch (e: any) {
@@ -234,7 +246,7 @@ export default function SegmentScreen() {
         image_b64,
         mask_b64,
         seed: 42,
-        onProgress: (progress, status) => {
+        onProgress: (progress: number, status: string) => {
           setGeneration3dProgress(progress);
           console.log(`Progress: ${progress}% - ${status}`);
         },
@@ -244,14 +256,23 @@ export default function SegmentScreen() {
         throw new Error(result.error ?? "Failed to generate 3D object");
       }
 
-      // Use PLY base64 data directly
-      if (!result.ply_b64) {
-        throw new Error("No PLY data in response");
+      console.log("=== 3D Generation Result ===");
+      console.log("Result keys:", Object.keys(result));
+      console.log("gif_b64 first 50 chars:", result.gif_b64?.substring(0, 50));
+
+      const gifB64 = result.gif_b64;
+
+      if (!gifB64) {
+        throw new Error("No GIF data in response");
       }
 
-      console.log("Storing PLY data in cache and navigating to viewer...");
-      // Store PLY data in cache (avoids route param size limits)
-      setPlyData(result.ply_b64);
+      console.log("GIF size:", gifB64.length ?? "null");
+      console.log("Storing GIF in cache and navigating to viewer...");
+
+      // Store GIF data in cache (avoids route param size limits)
+      // Using empty string for first parameter (backwards compatible with old PLY logic)
+      setGifData(gifB64);
+      console.log("Data stored in cache");
 
       // Navigate to viewer
       router.push("/viewer");
@@ -264,245 +285,229 @@ export default function SegmentScreen() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!uri || tapPositions.length === 0 || !imageBounds || !originalSize) {
-      Alert.alert(
-        "Add points to object",
-        "Tap one or more points on the object you want to turn into 3D."
-      );
-      return;
-    }
-
-    const { imageX, imageY, imageWidth, imageHeight } = imageBounds;
-    // Use the last tapped point as the primary point for 3D generation
-    const lastPos = tapPositions[tapPositions.length - 1];
-    const normalizedX = (lastPos.x - imageX) / imageWidth;
-    const normalizedY = (lastPos.y - imageY) / imageHeight;
-
-    try {
-      setLoading(true);
-
-      const image_b64 = await uriToResizedBase64(uri);
-      const jobId = await submitSam3dJob({
-        image_b64,
-        point: { x: normalizedX, y: normalizedY },
-      });
-      const output = await pollSam3dJob(jobId);
-
-      const modelUrl = (output as any)?.model_url;
-      if (!modelUrl) throw new Error("No model_url in output");
-
-      router.push({ pathname: "/viewer", params: { modelUrl } });
-    } catch (e: any) {
-      Alert.alert("Failed", e?.message ?? "Unknown error");
-    } finally {
-      setLoading(false);
-    }
+  const handleGenerate3dFinal = async () => {
+    // This is an alternative path - currently not used
+    // Kept for reference but handleGenerate3d is the active flow
+    return;
   };
 
   if (!uri) {
     return (
-      <View style={styles.container}>
-        <Text>No image URI provided.</Text>
+      <View className="flex-1 justify-center items-center bg-background">
+        <Text className="text-base text-foreground">
+          No image URI provided.
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.help}>
-        Tap multiple points on the object. Then submit.
-      </Text>
-
-      <View style={styles.controlRow}>
-        <Pressable
-          style={[styles.button, styles.resetButton]}
-          onPress={handleReset}
-          disabled={tapPositions.length === 0}
+    <Box flex={1} bg="#0a0e27">
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Header with Back Button */}
+        <HStack
+          px="$6"
+          py="$4"
+          alignItems="center"
+          borderBottomWidth={1}
+          borderBottomColor="#1e3a8a"
         >
-          <Text style={styles.buttonText}>Reset Points</Text>
-        </Pressable>
-        <Text style={styles.pointCount}>{tapPositions.length} point(s)</Text>
-      </View>
-
-      <Pressable
-        onPress={handleTap}
-        style={styles.imageContainer}
-        onLayout={(e) => {
-          const { width, height } = e.nativeEvent.layout;
-          console.log("Container size:", { width, height });
-          setContainerSize({ width, height });
-        }}
-      >
-        {/* Original image - always show this as base */}
-        <Image source={{ uri }} style={styles.image} resizeMode="contain" />
-
-        {/* Segmentation mask overlay */}
-        {maskImage && (
-          <Image
-            source={{ uri: maskImage }}
-            style={[styles.image, styles.maskOverlay]}
-            resizeMode="contain"
-            pointerEvents="none"
-          />
-        )}
-
-        {/* Loading indicator */}
-        {maskLoading && (
-          <View style={styles.loadingOverlay} pointerEvents="none">
-            <ActivityIndicator size="large" color="white" />
-          </View>
-        )}
-
-        {/* Multiple tap markers */}
-        {tapPositions.map((pos, index) => (
-          <View
-            key={index}
-            style={[
-              styles.marker,
-              {
-                left: pos.x - 10,
-                top: pos.y - 10,
-              },
-            ]}
-            pointerEvents="none"
+          <Pressable onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#e2e8f0" />
+          </Pressable>
+          <Heading
+            color="$white"
+            fontSize="$2xl"
+            fontWeight="$bold"
+            flex={1}
+            textAlign="center"
+            mr="$12"
           >
-            <Text style={styles.markerNumber}>{index + 1}</Text>
-          </View>
-        ))}
+            Segment Object
+          </Heading>
+        </HStack>
 
-        {/* Debug: Red border around calculated image bounds */}
-        {imageBounds && (
-          <View
-            style={{
-              position: "absolute",
-              left: imageBounds.imageX,
-              top: imageBounds.imageY,
-              width: imageBounds.imageWidth,
-              height: imageBounds.imageHeight,
-              borderWidth: 1,
-              borderColor: "rgba(255,0,0,0.3)",
+        {/* Instructions */}
+        <Box px="$6" py="$4">
+          <GluestackText color="#94a3b8" textAlign="center" fontSize="$sm">
+            Tap multiple points on the object
+          </GluestackText>
+        </Box>
+
+        {/* Reset and Point Counter */}
+        <HStack px="$6" pb="$4" space="sm" alignItems="center">
+          <GluestackButton
+            bg="#ef4444"
+            onPress={handleReset}
+            disabled={tapPositions.length === 0}
+            borderRadius="$lg"
+            h={40}
+            sx={{
+              ":pressed": {
+                bg: "#dc2626",
+              },
+              ":disabled": {
+                bg: "#6b7280",
+              },
             }}
-            pointerEvents="none"
-          />
-        )}
-      </Pressable>
+          >
+            <HStack space="sm" alignItems="center">
+              <Trash2 size={16} color="white" />
+              <ButtonText color="white" fontWeight="$semibold" fontSize="$sm">
+                Reset
+              </ButtonText>
+            </HStack>
+          </GluestackButton>
+          <GluestackText
+            color="#64748b"
+            fontSize="$sm"
+            flex={1}
+            textAlign="center"
+          >
+            {tapPositions.length} point(s)
+          </GluestackText>
+        </HStack>
 
-      <Pressable
-        style={[styles.button, generating3d && styles.buttonDisabled]}
-        onPress={handleGenerate3d}
-        disabled={generating3d || !maskImage}
-      >
-        {generating3d ? (
-          <View style={styles.progressContainer}>
-            <ActivityIndicator color="white" />
-            <Text style={styles.progressText}>
-              Generating 3D...
-              {generation3dProgress > 0 ? ` ${generation3dProgress}%` : ""}
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.buttonText}>
-            {maskImage ? "Generate 3D Object" : "Tap to segment first"}
-          </Text>
-        )}
-      </Pressable>
-    </View>
+        {/* Image Container */}
+        <Box px="$6" flex={1} mb="$4">
+          <Pressable
+            onPress={handleTap}
+            style={{
+              flex: 1,
+              borderRadius: 12,
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: "#1e3a8a",
+            }}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              console.log("Container size:", { width, height });
+              setContainerSize({ width, height });
+            }}
+          >
+            {/* Original image - always show this as base */}
+            <Image
+              source={{ uri }}
+              style={{
+                width: "100%",
+                height: "100%",
+                backgroundColor: "#0f172a",
+              }}
+              resizeMode="contain"
+            />
+
+            {/* Segmentation mask overlay */}
+            {maskImage && (
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
+              >
+                <Image
+                  source={{ uri: maskImage }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+
+            {/* Loading indicator */}
+            {maskLoading && (
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  {
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: "rgba(0,0,0,0.3)",
+                  },
+                ]}
+                pointerEvents="none"
+              >
+                <ActivityIndicator size="large" color="white" />
+              </View>
+            )}
+
+            {/* Multiple tap markers */}
+            {tapPositions.map((pos, index) => (
+              <View
+                key={index}
+                style={{
+                  position: "absolute",
+                  left: pos.x - 10,
+                  top: pos.y - 10,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: "white",
+                  backgroundColor: "rgba(59, 130, 246, 0.65)",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+                pointerEvents="none"
+              >
+                <Text
+                  style={{ color: "white", fontSize: 10, fontWeight: "bold" }}
+                >
+                  {index + 1}
+                </Text>
+              </View>
+            ))}
+
+            {/* Debug: Red border around calculated image bounds */}
+            {imageBounds && (
+              <View
+                style={{
+                  position: "absolute",
+                  left: imageBounds.imageX,
+                  top: imageBounds.imageY,
+                  width: imageBounds.imageWidth,
+                  height: imageBounds.imageHeight,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,0,0,0.3)",
+                }}
+                pointerEvents="none"
+              />
+            )}
+          </Pressable>
+        </Box>
+
+        {/* Generate Button */}
+        <Box px="$6" pb="$6">
+          <GluestackButton
+            w="$full"
+            bg={maskImage ? "#334155" : "#1e293b"}
+            onPress={handleGenerate3d}
+            disabled={generating3d || !maskImage}
+            borderRadius="$xl"
+            h={56}
+            borderWidth={1}
+            borderColor={maskImage ? "#475569" : "#334155"}
+            sx={{
+              ":pressed": {
+                bg: "#0f172a",
+              },
+            }}
+          >
+            {generating3d ? (
+              <HStack space="md" alignItems="center">
+                <ActivityIndicator color="#cbd5e1" />
+                <ButtonText color="#cbd5e1" fontWeight="$semibold">
+                  Generating...{" "}
+                  {generation3dProgress > 0 ? `${generation3dProgress}%` : ""}
+                </ButtonText>
+              </HStack>
+            ) : (
+              <ButtonText
+                color={maskImage ? "#e2e8f0" : "#64748b"}
+                fontWeight="$semibold"
+              >
+                {maskImage ? "Generate 3D Object" : "Tap to segment first"}
+              </ButtonText>
+            )}
+          </GluestackButton>
+        </Box>
+      </SafeAreaView>
+    </Box>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    gap: 12,
-  },
-  help: {
-    fontSize: 16,
-    textAlign: "center",
-  },
-  imageContainer: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#111",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-  },
-  processedOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    opacity: 0.4,
-  },
-  maskOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    opacity: 0.5, // Blend mask with original image for lighter exposure effect
-  },
-  loadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  marker: {
-    position: "absolute",
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "white",
-    backgroundColor: "rgba(27,110,243,0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  markerNumber: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  controlRow: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-  },
-  resetButton: {
-    flex: 1,
-    backgroundColor: "#ef4444",
-  },
-  pointCount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-  },
-  button: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    backgroundColor: "#1b6ef3",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "white",
-    fontWeight: "700",
-  },
-  progressContainer: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-  },
-  progressText: {
-    color: "white",
-    fontWeight: "600",
-  },
-});

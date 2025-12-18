@@ -1,37 +1,5 @@
-export type RunPodOutput =
-  | { model_url: string }
-  | { error: string }
-  | Record<string, unknown>;
-
-const API_BASE = "https://YOUR-PROXY.example.com"; // recommended
-const SAM_API_BASE = "https://8vqkpqlcboe32a-8001.proxy.runpod.net"; // SAM 2 API endpoint
-
-export async function submitSam3dJob(input: {
-  image_b64: string;
-  point: { x: number; y: number };
-}) {
-  const res = await fetch(`${API_BASE}/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input }),
-  });
-  if (!res.ok) throw new Error(`submit failed: ${res.status}`);
-  const json = await res.json();
-  return json.id as string;
-}
-
-export async function pollSam3dJob(jobId: string) {
-  while (true) {
-    const res = await fetch(`${API_BASE}/status/${jobId}`);
-    if (!res.ok) throw new Error(`status failed: ${res.status}`);
-    const json = await res.json();
-
-    if (json.status === "COMPLETED") return json.output as RunPodOutput;
-    if (json.status === "FAILED") throw new Error(json.error ?? "Job failed");
-
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-}
+// const SAM_API_BASE = "https://xuelq8x92urd3y-8001.proxy.runpod.net"; // SAM 2 API endpoint
+const SAM_API_BASE = "https://r1z500ltqe7r1o-8001.proxy.runpod.net";
 
 export async function segmentWithSam2(input: {
   image_b64: string;
@@ -42,7 +10,7 @@ export async function segmentWithSam2(input: {
   const payload: any = {
     image: input.image_b64,
     points: input.points,
-    mask_threshold: 0.0,
+    mask_threshold: input.mask_threshold ?? 0.0,
   };
 
   if (input.previous_mask) {
@@ -109,8 +77,7 @@ async function pollSam3dStatus(
   onProgress?: (progress: number, status: string) => void
 ): Promise<{
   success: boolean;
-  ply_b64?: string;
-  ply_url?: string;
+  gif_b64?: string;
   progress?: number;
   status?: string;
   error?: string;
@@ -141,11 +108,16 @@ async function pollSam3dStatus(
       }
 
       if (statusData.status === "completed") {
-        console.log("✓ Task completed, ply_b64 present:", !!statusData.ply_b64);
+        console.log("✓ Task completed, gif_b64 present:", !!statusData.gif_b64);
+        console.log("Response keys:", Object.keys(statusData));
+
+        if (statusData.gif_b64) {
+          console.log("GIF B64 size:", statusData.gif_b64.length, "bytes");
+        }
+
         return {
           success: true,
-          ply_b64: statusData.ply_b64,
-          ply_url: statusData.ply_url,
+          gif_b64: statusData.gif_b64,
         };
       }
 
@@ -188,8 +160,7 @@ export async function generateSam3dObject(input: {
   onProgress?: (progress: number, status: string) => void;
 }): Promise<{
   success: boolean;
-  ply_b64?: string;
-  ply_url?: string;
+  gif_b64?: string;
   error?: string;
 }> {
   try {
@@ -208,14 +179,16 @@ export async function generateSam3dObject(input: {
     console.log("✓ 3D generation complete!");
     console.log("Result:", {
       success: result.success,
-      hasPlyB64: !!result.ply_b64,
-      hasPlyUrl: !!result.ply_url,
+      hasGifB64: !!result.gif_b64,
     });
+    console.log(
+      "Returning from generateSam3dObject with gif_b64:",
+      !!result.gif_b64
+    );
 
     return {
       success: true,
-      ply_b64: result.ply_b64,
-      ply_url: result.ply_url,
+      gif_b64: result.gif_b64,
     };
   } catch (error: any) {
     console.error("3D generation error:", error);
