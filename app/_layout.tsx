@@ -1,7 +1,6 @@
 import { config } from "@gluestack-ui/config";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import { Stack } from "expo-router";
-import "react-native-reanimated";
 import "../global.css";
 
 export default function Layout() {

@@ -1,5 +1,5 @@
 // const SAM_API_BASE = "https://xuelq8x92urd3y-8001.proxy.runpod.net"; // SAM 2 API endpoint
-const SAM_API_BASE = "https://r1z500ltqe7r1o-8001.proxy.runpod.net";
+const SAM_API_BASE = "https://c6guxgy8crihdm-8001.proxy.runpod.net";
 
 export async function segmentWithSam2(input: {
   image_b64: string;

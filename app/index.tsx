@@ -18,7 +18,7 @@ import {
   ImagePlus,
   Trash2,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import { useState } from "react";
 import { Alert, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -282,28 +282,25 @@ const HomeScreen = () => {
           </VStack>
         </Box>
 
-        {/* Saved Models Link - Subtle */}
-        {imageUri && (
-          <Box px="$6" mb="$2">
-            <Button
-              w="$full"
-              bg="transparent"
-              borderWidth={2}
-              borderColor="#3b82f6"
-              borderStyle="solid"
-              onPress={() => router.push("/saved-models")}
-              borderRadius="$xl"
-              h={48}
-            >
-              <HStack space="sm" alignItems="center">
-                <FileText size={20} color="#3b82f6" />
-                <ButtonText color="#3b82f6" fontWeight="$bold">
-                  View Saved Models
-                </ButtonText>
-              </HStack>
-            </Button>
-          </Box>
-        )}
+        <Box px="$6" mb="$2">
+          <Button
+            w="$full"
+            bg="transparent"
+            borderWidth={2}
+            borderColor="#3b82f6"
+            borderStyle="solid"
+            onPress={() => router.push("/saved-models")}
+            borderRadius="$xl"
+            h={48}
+          >
+            <HStack space="sm" alignItems="center">
+              <FileText size={20} color="#3b82f6" />
+              <ButtonText color="#3b82f6" fontWeight="$bold">
+                View Saved Models
+              </ButtonText>
+            </HStack>
+          </Button>
+        </Box>
       </ScrollView>
     </Box>
   );
