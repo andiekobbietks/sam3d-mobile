@@ -1,50 +1,97 @@
-# Welcome to your Expo app 👋
+# Sam3D Mobile — Frontend for SAM3D API 🔭📱
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Sam3D Mobile** is an Expo-based frontend app designed to work with the SAM3D-API (SAM 2 segmentation + sam-3d-objects 3D generation). Use it to capture or load images, mark points for segmentation, and request 3D generation (PLY/GIF/GLB) from a running SAM3D API server.
 
-## Get started
+> 🚧 **Note**
+>
+> This app is intended to be used with the SAM3D-API project: https://github.com/andrisgauracs/sam3d-api
+
+---
+
+## Features ✅
+
+- Capture or pick images and draw/mark points to segment objects using SAM 2
+- Request async 3D generation (calls the API's `/generate-3d`, polls `/generate-3d-status`)
+- Preview generated GIFs and download/display assets
+- Persist and view saved models locally in the app (`/saved-models`)
+
+---
+
+## Quick start — run locally 🛠️
+
+Prerequisites:
+
+- Node.js (16+ recommended)
+- npm or yarn
+- Expo CLI (optional but useful): `npm i -g expo-cli`
 
 1. Install dependencies
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Start Expo
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Choose to open in the iOS Simulator, Android emulator, web, or Expo Go on your device.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+## Configure the SAM3D API endpoint 🔗
 
-Join our community of developers creating universal apps.
+The app calls the API using the constant `SAM_API_BASE` defined in `app/lib/api.ts`.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Example (default in this repo):
+
+```ts
+// app/lib/api.ts
+const SAM_API_BASE = "https://5vjqs0c5nmxrg6-8000.proxy.runpod.net";
+```
+
+To use your local or custom API, update that string. Common values:
+
+- Local API (macOS/iOS simulator / web): `http://localhost:8000`
+- Android emulator (Android Studio): `http://10.0.2.2:8000`
+- Remote server: `https://your-server.example.com`
+
+Note: The app expects the API to implement the following endpoints used by the frontend:
+
+- `POST /segment` and/or `POST /segment-binary` (segmentation)
+- `POST /generate-3d` (returns `task_id`)
+- `GET /generate-3d-status/{task_id}` (polling for results)
+- `GET /assets-list` (optional — list saved mesh/gif assets)
+
+If you want runtime configuration (instead of editing the file), consider adding a small runtime config or env setup and reading it in `app/lib/api.ts`.
+
+---
+
+## Development tips 🔧
+
+- Check the Metro/Expo console for logs when API calls fail — `app/lib/api.ts` logs status and errors.
+- For Android emulator networking, prefer `10.0.2.2` to access a host machine's localhost.
+- When testing with a local SAM3D-API instance, ensure CORS is configured to accept requests from your app or use the same host/port under development.
+
+---
+
+## Project structure (short)
+
+- `app/` — Expo Router pages and UI
+- `app/lib/api.ts` — HTTP helpers that call the SAM3D API
+- `app/viewer.tsx` — viewer for generated models/GIFs
+- `assets/` — images and static assets
+
+---
+
+## Contributing & links 🔭
+
+If you find issues or want to add features, open an issue or PR here with a short description and steps to reproduce.
+
+---
+
+## License
+
+MIT
