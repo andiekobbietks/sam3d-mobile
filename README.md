@@ -2,6 +2,8 @@
 
 **Sam3D Mobile** is an Expo-based frontend app designed to work with the SAM3D-API (SAM 2 segmentation + sam-3d-objects 3D generation). Use it to capture or load images, mark points for segmentation, and request 3D generation (PLY/GIF/GLB) from a running SAM3D API server.
 
+![preview](https://github.com/user-attachments/assets/29bd8720-59ec-44a0-9f2c-2e7b8672f576)
+
 > 🚧 **Note**
 >
 > This app is intended to be used with the SAM3D-API project: https://github.com/andrisgauracs/sam3d-api
